@@ -7,8 +7,8 @@ describe("DataTraceAccess", async function () {
   const { viem } = await network.create();
 
   async function deployAccessFixture() {
-    const [governance, provider, developer, auditor] =
-      await viem.getWalletClients();
+    const [governance, provider, developer, auditor, attacker] =
+     await viem.getWalletClients();
 
     const access = await viem.deployContract("DataTraceAccess");
 
@@ -40,6 +40,7 @@ describe("DataTraceAccess", async function () {
       auditor,
       accessAsProvider,
       accessAsDeveloper,
+      attacker,
     };
   }
 
@@ -135,7 +136,32 @@ describe("DataTraceAccess", async function () {
       ]);
     });
   });
+it("An unauthorized account should not assign roles", async function () {
+  const {
+    access,
+    developer,
+    attacker,
+  } = await deployAccessFixture();
 
+  const developerRole = await access.read.AI_DEVELOPER_ROLE();
+
+  const accessAsAttacker = await viem.getContractAt(
+    "DataTraceAccess",
+    access.address,
+    {
+      client: {
+        wallet: attacker,
+      },
+    },
+  );
+
+  await assert.rejects(async () => {
+    await accessAsAttacker.write.grantRole([
+      developerRole,
+      developer.account.address,
+    ]);
+  });
+});
   it("An AI Developer should not pause the contract", async function () {
     const {
       access,
