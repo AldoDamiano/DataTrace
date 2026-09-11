@@ -350,6 +350,56 @@ it("A revoked AI Developer should not register a model", async function () {
     },
   );
 
+it(
+  "A revoked AI Developer should not retire a model",
+  async function () {
+    const {
+      registry,
+      registryAsDeveloper,
+      developer,
+    } = await deployModelFixture();
+
+    const modelHash = keccak256(
+      toBytes("revoked-developer-retirement-model"),
+    );
+
+    await registryAsDeveloper.write.registerModel([
+      modelHash,
+    ]);
+
+    const developerRole =
+      await registry.read.AI_DEVELOPER_ROLE();
+
+    const hasRoleBefore =
+      await registry.read.hasRole([
+        developerRole,
+        developer.account.address,
+      ]);
+
+    assert.equal(hasRoleBefore, true);
+
+    await registry.write.revokeRole([
+      developerRole,
+      developer.account.address,
+    ]);
+
+    const hasRoleAfter =
+      await registry.read.hasRole([
+        developerRole,
+        developer.account.address,
+      ]);
+
+    assert.equal(hasRoleAfter, false);
+
+    await assert.rejects(async () => {
+      await registryAsDeveloper.write
+        .retireModel([
+          1n,
+        ]);
+    });
+  },
+);
+
   it(
     "Another AI Developer should not retire someone else's model",
     async function () {
