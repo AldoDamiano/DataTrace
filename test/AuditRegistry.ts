@@ -425,6 +425,63 @@ describe("AuditRegistry", async function () {
   );
 
   it(
+    "A revoked Auditor should not submit an audit",
+    async function () {
+      const {
+        registry,
+        registryAsAuditor,
+        auditor,
+        createPendingDataset,
+      } = await deployAuditFixture();
+
+      await createPendingDataset(
+        "revoked-auditor-dataset",
+      );
+
+      const auditorRole =
+        await registry.read.AUDITOR_ROLE();
+
+      const hasRoleBefore =
+        await registry.read.hasRole([
+          auditorRole,
+          auditor.account.address,
+        ]);
+
+      assert.equal(hasRoleBefore, true);
+
+      await registry.write.revokeRole([
+        auditorRole,
+        auditor.account.address,
+      ]);
+
+      const hasRoleAfter =
+        await registry.read.hasRole([
+          auditorRole,
+          auditor.account.address,
+        ]);
+
+      assert.equal(hasRoleAfter, false);
+
+      const reportHash =
+        keccak256(
+          toBytes("revoked-auditor-report"),
+        );
+
+      await assert.rejects(
+        async () => {
+          await registryAsAuditor.write
+            .submitAudit([
+              1n,
+              1n,
+              reportHash,
+              0,
+            ]);
+        },
+      );
+    },
+  );
+
+  it(
     "A Data Provider should not submit an audit without the Auditor role",
     async function () {
       const {
