@@ -159,7 +159,37 @@ describe("DatasetRegistry", async function () {
         ]);
     });
   });
+it(
+  "Governance should not register a dataset without the Data Provider role",
+  async function () {
+    const {
+      registry,
+      governance,
+    } = await deployRegistryFixture();
 
+    const providerRole =
+      await registry.read.DATA_PROVIDER_ROLE();
+
+    const hasProviderRole =
+      await registry.read.hasRole([
+        providerRole,
+        governance.account.address,
+      ]);
+
+    assert.equal(hasProviderRole, false);
+
+    const datasetHash =
+      keccak256(
+        toBytes("governance-without-provider-role"),
+      );
+
+    await assert.rejects(async () => {
+      await registry.write.registerDataset([
+        datasetHash,
+      ]);
+    });
+  },
+);
   it("A revoked Data Provider should not register a dataset", async function () {
     const {
       registry,
