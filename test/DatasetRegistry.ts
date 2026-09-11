@@ -877,6 +877,66 @@ it(
     assert.equal(version.status, 3);
   });
 
+it(
+  "Revoking a dataset version should preserve its historical data",
+  async function () {
+    const {
+      registry,
+      registryAsProvider,
+    } = await deployRegistryFixture();
+
+    const datasetHash = keccak256(
+      toBytes("historical-integrity-dataset"),
+    );
+
+    await registryAsProvider.write.registerDataset([
+      datasetHash,
+    ]);
+
+    const before =
+      await registry.read.getDatasetVersion([
+        1n,
+        1n,
+      ]);
+
+    await registry.write.approveDatasetVersion([
+      1n,
+      1n,
+    ]);
+
+    await registry.write.revokeDatasetVersion([
+      1n,
+      1n,
+    ]);
+
+    const after =
+      await registry.read.getDatasetVersion([
+        1n,
+        1n,
+      ]);
+
+    assert.equal(
+      after.contentHash,
+      before.contentHash,
+    );
+
+    assert.equal(
+      after.createdAt,
+      before.createdAt,
+    );
+
+    assert.equal(
+      after.exists,
+      true,
+    );
+
+    assert.equal(
+      after.status,
+      3,
+    );
+  },
+);
+
   it("Governance should revoke a Suspended dataset version", async function () {
     const {
       registry,
