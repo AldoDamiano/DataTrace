@@ -160,6 +160,51 @@ describe("DatasetRegistry", async function () {
     });
   });
 
+  it("A revoked Data Provider should not register a dataset", async function () {
+    const {
+      registry,
+      registryAsProvider,
+      provider,
+    } = await deployRegistryFixture();
+
+    const providerRole =
+      await registry.read.DATA_PROVIDER_ROLE();
+
+    // The provider is authorized by the fixture.
+    const hasRoleBefore =
+      await registry.read.hasRole([
+        providerRole,
+        provider.account.address,
+      ]);
+
+    assert.equal(hasRoleBefore, true);
+
+    // Governance revokes the Data Provider role.
+    await registry.write.revokeRole([
+      providerRole,
+      provider.account.address,
+    ]);
+
+    const hasRoleAfter =
+      await registry.read.hasRole([
+        providerRole,
+        provider.account.address,
+      ]);
+
+    assert.equal(hasRoleAfter, false);
+
+    const datasetHash = keccak256(
+      toBytes("revoked-provider-dataset"),
+    );
+
+    // The revoked provider must no longer be able to register datasets.
+    await assert.rejects(async () => {
+      await registryAsProvider.write.registerDataset([
+        datasetHash,
+      ]);
+    });
+  });
+
   it("A Data Provider should not register a dataset with an empty hash", async function () {
     const {
       registryAsProvider,

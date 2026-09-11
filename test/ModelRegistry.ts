@@ -230,7 +230,47 @@ describe("ModelRegistry", async function () {
       });
     },
   );
+it("A revoked AI Developer should not register a model", async function () {
+  const {
+    registry,
+    registryAsDeveloper,
+    developer,
+  } = await deployModelFixture();
 
+  const developerRole =
+    await registry.read.AI_DEVELOPER_ROLE();
+
+  const hasRoleBefore =
+    await registry.read.hasRole([
+      developerRole,
+      developer.account.address,
+    ]);
+
+  assert.equal(hasRoleBefore, true);
+
+  await registry.write.revokeRole([
+    developerRole,
+    developer.account.address,
+  ]);
+
+  const hasRoleAfter =
+    await registry.read.hasRole([
+      developerRole,
+      developer.account.address,
+    ]);
+
+  assert.equal(hasRoleAfter, false);
+
+  const modelHash = keccak256(
+    toBytes("revoked-developer-model"),
+  );
+
+  await assert.rejects(async () => {
+    await registryAsDeveloper.write.registerModel([
+      modelHash,
+    ]);
+  });
+});
   it(
     "An AI Developer should not register a model with an empty hash",
     async function () {
