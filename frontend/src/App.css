@@ -1,0 +1,208 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  background: #0b1020;
+  color: #f5f7ff;
+}
+
+button {
+  font: inherit;
+}
+
+.app {
+  min-height: 100vh;
+}
+
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  padding: 24px 8%;
+  border-bottom: 1px solid #252c40;
+}
+
+.navbar h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.navbar p {
+  margin: 4px 0 0;
+  color: #9da8c7;
+  font-size: 14px;
+}
+
+.connect-button,
+.primary-button {
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+
+  background: #646cff;
+  color: white;
+
+  padding: 12px 20px;
+  font-weight: 600;
+}
+
+.connect-button:hover,
+.primary-button:hover {
+  opacity: 0.9;
+}
+
+.wallet-badge {
+  padding: 10px 16px;
+  border: 1px solid #353f61;
+  border-radius: 10px;
+
+  background: #151b2e;
+  font-family: monospace;
+}
+
+.hero-section {
+  padding: 100px 8% 70px;
+}
+
+.hero-content {
+  max-width: 750px;
+}
+
+.network-label {
+  display: inline-block;
+
+  margin-bottom: 20px;
+  padding: 7px 12px;
+
+  border: 1px solid #38436b;
+  border-radius: 20px;
+
+  color: #aeb8ff;
+  font-size: 14px;
+}
+
+.hero-content h2 {
+  max-width: 700px;
+  margin: 0 0 24px;
+
+  font-size: clamp(40px, 7vw, 72px);
+  line-height: 1.05;
+}
+
+.hero-content p {
+  max-width: 650px;
+  margin-bottom: 32px;
+
+  color: #a9b1c7;
+  font-size: 18px;
+  line-height: 1.7;
+}
+
+.status-section {
+  padding: 20px 8% 80px;
+}
+
+.status-section h3 {
+  font-size: 24px;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+
+  margin-top: 24px;
+}
+
+.status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  padding: 22px;
+
+  border: 1px solid #252c40;
+  border-radius: 14px;
+
+  background: #11172a;
+}
+
+.status-title {
+  color: #8f9aba;
+  font-size: 14px;
+}
+
+.status-card strong {
+  font-family: monospace;
+}
+
+.success,
+.warning,
+.error {
+  margin-top: 24px;
+  padding: 16px 18px;
+  border-radius: 10px;
+}
+
+.success {
+  background: #11291e;
+  color: #72e5a5;
+}
+
+.warning {
+  background: #302813;
+  color: #f4d06f;
+}
+
+.error {
+  background: #321719;
+  color: #ff949c;
+}
+
+@media (max-width: 600px) {
+  .navbar {
+    padding: 20px;
+  }
+
+  .navbar p {
+    display: none;
+  }
+
+  .hero-section,
+  .status-section {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+.status-card input {
+  width: 100%;
+
+  padding: 12px 14px;
+
+  border: 1px solid #353f61;
+  border-radius: 8px;
+
+  background: #0b1020;
+  color: #f5f7ff;
+
+  font: inherit;
+}
+
+.status-card input:focus {
+  outline: 2px solid #646cff;
+  border-color: transparent;
+}

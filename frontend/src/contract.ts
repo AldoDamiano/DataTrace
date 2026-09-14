@@ -1,0 +1,52 @@
+export const contractAddress =
+  '0x4d3e064a36db3f8730079f44f75a0a72cf2a4493' as const
+
+export const contractAbi = [
+  {
+    type: 'function',
+    name: 'GOVERNANCE_ROLE',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }],
+  },
+  {
+    type: 'function',
+    name: 'DATA_PROVIDER_ROLE',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }],
+  },
+  {
+    type: 'function',
+    name: 'AI_DEVELOPER_ROLE',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }],
+  },
+  {
+    type: 'function',
+    name: 'AUDITOR_ROLE',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }],
+  },
+  {
+    type: 'function',
+    name: 'hasRole',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'role', type: 'bytes32' },
+      { name: 'account', type: 'address' },
+    ],
+    outputs: [{ type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'registerDataset',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'contentHash', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+] as const
