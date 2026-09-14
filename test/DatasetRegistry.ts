@@ -159,6 +159,81 @@ describe("DatasetRegistry", async function () {
         ]);
     });
   });
+it(
+  "Governance should not register a dataset without the Data Provider role",
+  async function () {
+    const {
+      registry,
+      governance,
+    } = await deployRegistryFixture();
+
+    const providerRole =
+      await registry.read.DATA_PROVIDER_ROLE();
+
+    const hasProviderRole =
+      await registry.read.hasRole([
+        providerRole,
+        governance.account.address,
+      ]);
+
+    assert.equal(hasProviderRole, false);
+
+    const datasetHash =
+      keccak256(
+        toBytes("governance-without-provider-role"),
+      );
+
+    await assert.rejects(async () => {
+      await registry.write.registerDataset([
+        datasetHash,
+      ]);
+    });
+  },
+);
+  it("A revoked Data Provider should not register a dataset", async function () {
+    const {
+      registry,
+      registryAsProvider,
+      provider,
+    } = await deployRegistryFixture();
+
+    const providerRole =
+      await registry.read.DATA_PROVIDER_ROLE();
+
+    // The provider is authorized by the fixture.
+    const hasRoleBefore =
+      await registry.read.hasRole([
+        providerRole,
+        provider.account.address,
+      ]);
+
+    assert.equal(hasRoleBefore, true);
+
+    // Governance revokes the Data Provider role.
+    await registry.write.revokeRole([
+      providerRole,
+      provider.account.address,
+    ]);
+
+    const hasRoleAfter =
+      await registry.read.hasRole([
+        providerRole,
+        provider.account.address,
+      ]);
+
+    assert.equal(hasRoleAfter, false);
+
+    const datasetHash = keccak256(
+      toBytes("revoked-provider-dataset"),
+    );
+
+    // The revoked provider must no longer be able to register datasets.
+    await assert.rejects(async () => {
+      await registryAsProvider.write.registerDataset([
+        datasetHash,
+      ]);
+    });
+  });
 
   it("A Data Provider should not register a dataset with an empty hash", async function () {
     const {
@@ -801,6 +876,66 @@ describe("DatasetRegistry", async function () {
 
     assert.equal(version.status, 3);
   });
+
+it(
+  "Revoking a dataset version should preserve its historical data",
+  async function () {
+    const {
+      registry,
+      registryAsProvider,
+    } = await deployRegistryFixture();
+
+    const datasetHash = keccak256(
+      toBytes("historical-integrity-dataset"),
+    );
+
+    await registryAsProvider.write.registerDataset([
+      datasetHash,
+    ]);
+
+    const before =
+      await registry.read.getDatasetVersion([
+        1n,
+        1n,
+      ]);
+
+    await registry.write.approveDatasetVersion([
+      1n,
+      1n,
+    ]);
+
+    await registry.write.revokeDatasetVersion([
+      1n,
+      1n,
+    ]);
+
+    const after =
+      await registry.read.getDatasetVersion([
+        1n,
+        1n,
+      ]);
+
+    assert.equal(
+      after.contentHash,
+      before.contentHash,
+    );
+
+    assert.equal(
+      after.createdAt,
+      before.createdAt,
+    );
+
+    assert.equal(
+      after.exists,
+      true,
+    );
+
+    assert.equal(
+      after.status,
+      3,
+    );
+  },
+);
 
   it("Governance should revoke a Suspended dataset version", async function () {
     const {

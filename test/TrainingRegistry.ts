@@ -181,17 +181,18 @@ describe("TrainingRegistry", async function () {
       return modelId;
     }
 
-    return {
-      registry,
-      registryAsProvider,
-      registryAsDeveloper,
-      registryAsSecondDeveloper,
-      registryAsUnauthorized,
-      createPendingDataset,
-      createApprovedDataset,
-      createActiveModel,
-      createSecondDeveloperModel,
-    };
+return {
+  registry,
+  developer,
+  registryAsProvider,
+  registryAsDeveloper,
+  registryAsSecondDeveloper,
+  registryAsUnauthorized,
+  createPendingDataset,
+  createApprovedDataset,
+  createActiveModel,
+  createSecondDeveloperModel,
+};
   }
 
   // ==================================================
@@ -439,6 +440,65 @@ describe("TrainingRegistry", async function () {
       );
     },
   );
+it(
+  "A revoked AI Developer should not register a training",
+  async function () {
+    const {
+      registry,
+      registryAsDeveloper,
+      developer,
+      createApprovedDataset,
+      createActiveModel,
+    } = await deployTrainingFixture();
+
+    const developerRole =
+      await registry.read.AI_DEVELOPER_ROLE();
+
+    const hasRoleBefore =
+      await registry.read.hasRole([
+        developerRole,
+        developer.account.address,
+      ]);
+
+    assert.equal(hasRoleBefore, true);
+
+    const datasetId =
+      await createApprovedDataset(
+        "revoked-developer-dataset",
+        0,
+      );
+
+    const modelId =
+      await createActiveModel(
+        "revoked-developer-model",
+      );
+
+    await registry.write.revokeRole([
+      developerRole,
+      developer.account.address,
+    ]);
+
+    const hasRoleAfter =
+      await registry.read.hasRole([
+        developerRole,
+        developer.account.address,
+      ]);
+
+    assert.equal(hasRoleAfter, false);
+
+    await assert.rejects(
+      async () => {
+        await registryAsDeveloper.write
+          .registerTraining([
+            modelId,
+            [datasetId],
+            [1n],
+            0,
+          ]);
+      },
+    );
+  },
+);
 
   it(
     "An AI Developer should not register training for another developer's model",
