@@ -49,4 +49,90 @@ export const contractAbi = [
     ],
     outputs: [],
   },
+  {
+  type: 'function',
+  name: 'getDataset',
+  stateMutability: 'view',
+  inputs: [
+    {
+      name: 'datasetId',
+      type: 'uint256',
+    },
+  ],
+  outputs: [
+    {
+      name: '',
+      type: 'tuple',
+      components: [
+        {
+          name: 'provider',
+          type: 'address',
+        },
+        {
+          name: 'latestVersion',
+          type: 'uint256',
+        },
+        {
+          name: 'exists',
+          type: 'bool',
+        },
+      ],
+    },
+  ],
+},
+{
+  type: 'function',
+  name: 'getDatasetVersion',
+  stateMutability: 'view',
+  inputs: [
+    {
+      name: 'datasetId',
+      type: 'uint256',
+    },
+    {
+      name: 'version',
+      type: 'uint256',
+    },
+  ],
+  outputs: [
+    {
+      name: '',
+      type: 'tuple',
+      components: [
+        {
+          name: 'contentHash',
+          type: 'bytes32',
+        },
+        {
+          name: 'status',
+          type: 'uint8',
+        },
+        {
+          name: 'createdAt',
+          type: 'uint256',
+        },
+        {
+          name: 'exists',
+          type: 'bool',
+        },
+      ],
+    },
+  ],
+},
+{
+  type: 'function',
+  name: 'approveDatasetVersion',
+  stateMutability: 'nonpayable',
+  inputs: [
+    {
+      name: 'datasetId',
+      type: 'uint256',
+    },
+    {
+      name: 'version',
+      type: 'uint256',
+    },
+  ],
+  outputs: [],
+},
 ] as const
