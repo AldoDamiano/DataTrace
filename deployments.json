@@ -1,0 +1,7 @@
+{
+  "sepolia": {
+    "chainId": 11155111,
+    "AuditRegistry": "0x4d3e064a36db3f8730079f44f75a0a72cf2a4493",
+    "deployer": "0x349da664a5307cf0ece0cc75c0def09c9f54bb43"
+  }
+}
