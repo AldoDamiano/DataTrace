@@ -45,10 +45,10 @@ function App() {
   const [error, setError] =
     useState('')
 
-  const [datasetInput, setDatasetInput] =
+  const [txStatus, setTxStatus] =
     useState('')
 
-  const [txStatus, setTxStatus] =
+  const [datasetInput, setDatasetInput] =
     useState('')
 
   const [datasetIdInput, setDatasetIdInput] =
@@ -58,6 +58,12 @@ function App() {
     useState<DatasetInfo | null>(null)
 
   const [lookupStatus, setLookupStatus] =
+    useState('')
+
+  const [versionDatasetId, setVersionDatasetId] =
+    useState('1')
+
+  const [versionInput, setVersionInput] =
     useState('')
 
   const createSepoliaPublicClient = () => {
@@ -191,12 +197,10 @@ function App() {
         })
 
       const accounts =
-        await walletClient
-          .requestAddresses()
+        await walletClient.requestAddresses()
 
       const currentChainId =
-        await walletClient
-          .getChainId()
+        await walletClient.getChainId()
 
       if (accounts.length === 0) {
         setError(
@@ -208,13 +212,8 @@ function App() {
       const connectedAccount =
         accounts[0]
 
-      setAccount(
-        connectedAccount,
-      )
-
-      setChainId(
-        currentChainId,
-      )
+      setAccount(connectedAccount)
+      setChainId(currentChainId)
 
       if (
         currentChainId ===
@@ -238,14 +237,10 @@ function App() {
       setError('')
       setTxStatus('')
 
-      if (!window.ethereum) {
-        setError(
-          'MetaMask non è disponibile.',
-        )
-        return
-      }
-
-      if (!account) {
+      if (
+        !window.ethereum ||
+        !account
+      ) {
         setError(
           'Collega prima il wallet.',
         )
@@ -306,19 +301,16 @@ function App() {
         )
 
         const hash =
-          await walletClient
-            .writeContract({
-              account,
-              chain: sepolia,
-              address:
-                contractAddress,
-              abi: contractAbi,
-              functionName:
-                'registerDataset',
-              args: [
-                contentHash,
-              ],
-            })
+          await walletClient.writeContract({
+            account,
+            chain: sepolia,
+            address: contractAddress,
+            abi: contractAbi,
+            functionName: 'registerDataset',
+            args: [
+              contentHash,
+            ],
+          })
 
         setTxStatus(
           `Transazione inviata: ${hash.slice(
@@ -346,17 +338,56 @@ function App() {
       }
     }
 
-  const loadDataset =
+  const addDatasetVersion =
     async () => {
       setError('')
-      setLookupStatus('')
-      setDatasetInfo(null)
+      setTxStatus('')
 
       if (
-        !datasetIdInput.trim()
+        !window.ethereum ||
+        !account
       ) {
         setError(
-          'Inserisci un Dataset ID.',
+          'Collega prima il wallet.',
+        )
+        return
+      }
+
+      if (
+        chainId !==
+        sepolia.id
+      ) {
+        setError(
+          'MetaMask deve essere collegato a Ethereum Sepolia.',
+        )
+        return
+      }
+
+      if (
+        !roles.includes(
+          'Data Provider',
+        )
+      ) {
+        setError(
+          'Il wallet non ha il ruolo Data Provider.',
+        )
+        return
+      }
+
+      if (
+        !versionDatasetId.trim()
+      ) {
+        setError(
+          'Inserisci il Dataset ID.',
+        )
+        return
+      }
+
+      if (
+        !versionInput.trim()
+      ) {
+        setError(
+          'Inserisci il contenuto della nuova versione.',
         )
         return
       }
@@ -366,7 +397,7 @@ function App() {
       try {
         datasetId =
           BigInt(
-            datasetIdInput,
+            versionDatasetId,
           )
       } catch {
         setError(
@@ -375,12 +406,92 @@ function App() {
         return
       }
 
-      if (datasetId <= 0n) {
+      if (
+        datasetId <= 0n
+      ) {
         setError(
           'Il Dataset ID deve essere maggiore di zero.',
         )
         return
       }
+
+      try {
+        const walletClient =
+          createWalletClient({
+            chain: sepolia,
+            transport: custom(
+              window.ethereum,
+            ),
+          })
+
+        const publicClient =
+          createSepoliaPublicClient()
+
+        const contentHash =
+          keccak256(
+            toBytes(
+              versionInput.trim(),
+            ),
+          )
+
+        setTxStatus(
+          'Attendi conferma in MetaMask...',
+        )
+
+        const hash =
+          await walletClient.writeContract({
+            account,
+            chain: sepolia,
+            address: contractAddress,
+            abi: contractAbi,
+            functionName: 'addDatasetVersion',
+            args: [
+              datasetId,
+              contentHash,
+            ],
+          })
+
+        setTxStatus(
+          `Transazione inviata: ${hash.slice(
+            0,
+            10,
+          )}...`,
+        )
+
+        await publicClient
+          .waitForTransactionReceipt({
+            hash,
+          })
+
+        setTxStatus(
+          'Nuova versione del dataset registrata correttamente.',
+        )
+
+        setVersionInput('')
+
+        setDatasetIdInput(
+          datasetId.toString(),
+        )
+
+        await loadDatasetById(
+          datasetId,
+        )
+      } catch (err) {
+        console.error(err)
+
+        setError(
+          'Creazione della nuova versione annullata o non riuscita.',
+        )
+      }
+    }
+
+  const loadDatasetById =
+    async (
+      datasetId: bigint,
+    ) => {
+      setError('')
+      setLookupStatus('')
+      setDatasetInfo(null)
 
       try {
         setLookupStatus(
@@ -391,19 +502,18 @@ function App() {
           createSepoliaPublicClient()
 
         const dataset =
-          await publicClient
-            .readContract({
-              address:
-                contractAddress,
-              abi: contractAbi,
-              functionName:
-                'getDataset',
-              args: [
-                datasetId,
-              ],
-            })
+          await publicClient.readContract({
+            address: contractAddress,
+            abi: contractAbi,
+            functionName: 'getDataset',
+            args: [
+              datasetId,
+            ],
+          })
 
-        if (!dataset.exists) {
+        if (
+          !dataset.exists
+        ) {
           setLookupStatus(
             'Dataset non trovato.',
           )
@@ -411,20 +521,19 @@ function App() {
         }
 
         const version =
-          await publicClient
-            .readContract({
-              address:
-                contractAddress,
-              abi: contractAbi,
-              functionName:
-                'getDatasetVersion',
-              args: [
-                datasetId,
-                dataset.latestVersion,
-              ],
-            })
+          await publicClient.readContract({
+            address: contractAddress,
+            abi: contractAbi,
+            functionName: 'getDatasetVersion',
+            args: [
+              datasetId,
+              dataset.latestVersion,
+            ],
+          })
 
-        if (!version.exists) {
+        if (
+          !version.exists
+        ) {
           setLookupStatus(
             'Versione del dataset non trovata.',
           )
@@ -453,6 +562,45 @@ function App() {
           'Lettura del dataset non riuscita.',
         )
       }
+    }
+
+  const loadDataset =
+    async () => {
+      if (
+        !datasetIdInput.trim()
+      ) {
+        setError(
+          'Inserisci un Dataset ID.',
+        )
+        return
+      }
+
+      let datasetId: bigint
+
+      try {
+        datasetId =
+          BigInt(
+            datasetIdInput,
+          )
+      } catch {
+        setError(
+          'Il Dataset ID deve essere un numero.',
+        )
+        return
+      }
+
+      if (
+        datasetId <= 0n
+      ) {
+        setError(
+          'Il Dataset ID deve essere maggiore di zero.',
+        )
+        return
+      }
+
+      await loadDatasetById(
+        datasetId,
+      )
     }
 
   const approveDataset =
@@ -491,7 +639,9 @@ function App() {
         return
       }
 
-      if (!datasetInfo) {
+      if (
+        !datasetInfo
+      ) {
         setError(
           'Carica prima un dataset.',
         )
@@ -515,20 +665,17 @@ function App() {
         )
 
         const hash =
-          await walletClient
-            .writeContract({
-              account,
-              chain: sepolia,
-              address:
-                contractAddress,
-              abi: contractAbi,
-              functionName:
-                'approveDatasetVersion',
-              args: [
-                datasetInfo.id,
-                datasetInfo.latestVersion,
-              ],
-            })
+          await walletClient.writeContract({
+            account,
+            chain: sepolia,
+            address: contractAddress,
+            abi: contractAbi,
+            functionName: 'approveDatasetVersion',
+            args: [
+              datasetInfo.id,
+              datasetInfo.latestVersion,
+            ],
+          })
 
         setTxStatus(
           `Transazione inviata: ${hash.slice(
@@ -546,7 +693,9 @@ function App() {
           'Dataset approvato correttamente.',
         )
 
-        await loadDataset()
+        await loadDatasetById(
+          datasetInfo.id,
+        )
       } catch (err) {
         console.error(err)
 
@@ -607,8 +756,7 @@ function App() {
           </h1>
 
           <p>
-            AI Data Provenance
-            & Audit Registry
+            AI Data Provenance & Audit Registry
           </p>
         </div>
 
@@ -635,18 +783,14 @@ function App() {
           </span>
 
           <h2>
-            Trace the provenance
-            of AI data.
+            Trace the provenance of AI data.
           </h2>
 
           <p>
-            DataTrace registra
-            dataset, modelli,
-            training e audit su
-            blockchain, garantendo
-            tracciabilità e
-            integrità della
-            provenance.
+            DataTrace registra dataset, modelli,
+            training e audit su blockchain,
+            garantendo tracciabilità e integrità
+            della provenance.
           </p>
 
           {!account && (
@@ -711,9 +855,7 @@ function App() {
 
             <strong>
               {roles.length > 0
-                ? roles.join(
-                    ', ',
-                  )
+                ? roles.join(', ')
                 : 'No assigned roles'}
             </strong>
           </div>
@@ -722,18 +864,14 @@ function App() {
         {account &&
           !isSepolia && (
             <div className="warning">
-              ⚠️ MetaMask non
-              è collegato a
-              Ethereum Sepolia.
+              ⚠️ MetaMask non è collegato a Ethereum Sepolia.
             </div>
           )}
 
         {account &&
           isSepolia && (
             <div className="success">
-              ✓ Wallet collegato
-              correttamente a
-              Sepolia.
+              ✓ Wallet collegato correttamente a Sepolia.
             </div>
           )}
 
@@ -758,35 +896,82 @@ function App() {
             Dataset Management
           </h3>
 
-          <div className="status-card">
-            <span className="status-title">
-              Register Dataset
-            </span>
+          <div className="status-grid">
+            <div className="status-card">
+              <span className="status-title">
+                Register Dataset
+              </span>
 
-            <input
-              type="text"
-              placeholder="Es. dataset-cats-v1.csv"
-              value={
-                datasetInput
-              }
-              onChange={(
-                event,
-              ) =>
-                setDatasetInput(
-                  event.target
-                    .value,
-                )
-              }
-            />
+              <input
+                type="text"
+                placeholder="Es. dataset-cats-v1.csv"
+                value={
+                  datasetInput
+                }
+                onChange={(
+                  event,
+                ) =>
+                  setDatasetInput(
+                    event.target.value,
+                  )
+                }
+              />
 
-            <button
-              className="primary-button"
-              onClick={
-                registerDataset
-              }
-            >
-              Register Dataset
-            </button>
+              <button
+                className="primary-button"
+                onClick={
+                  registerDataset
+                }
+              >
+                Register Dataset
+              </button>
+            </div>
+
+            <div className="status-card">
+              <span className="status-title">
+                Add Dataset Version
+              </span>
+
+              <input
+                type="number"
+                min="1"
+                placeholder="Dataset ID"
+                value={
+                  versionDatasetId
+                }
+                onChange={(
+                  event,
+                ) =>
+                  setVersionDatasetId(
+                    event.target.value,
+                  )
+                }
+              />
+
+              <input
+                type="text"
+                placeholder="Es. dataset-cats-v2.csv"
+                value={
+                  versionInput
+                }
+                onChange={(
+                  event,
+                ) =>
+                  setVersionInput(
+                    event.target.value,
+                  )
+                }
+              />
+
+              <button
+                className="primary-button"
+                onClick={
+                  addDatasetVersion
+                }
+              >
+                Add Version
+              </button>
+            </div>
           </div>
         </section>
       )}
@@ -811,8 +996,7 @@ function App() {
               event,
             ) =>
               setDatasetIdInput(
-                event.target
-                  .value,
+                event.target.value,
               )
             }
           />
@@ -868,8 +1052,7 @@ function App() {
                 </span>
 
                 <strong>
-                  {datasetInfo
-                    .latestVersion
+                  {datasetInfo.latestVersion
                     .toString()}
                 </strong>
               </div>
