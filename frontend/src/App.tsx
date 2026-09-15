@@ -31,7 +31,14 @@ type DatasetInfo = {
   createdAt: bigint
   status: number
 }
-
+type ModelInfo = {
+  id: bigint
+  modelHash: `0x${string}`
+  developer: `0x${string}`
+  status: number
+  createdAt: bigint
+  retiredAt: bigint
+}
 function App() {
   const [account, setAccount] =
     useState<Address | null>(null)
@@ -64,6 +71,17 @@ function App() {
     useState('1')
 
   const [versionInput, setVersionInput] =
+    useState('')
+  const [modelInput, setModelInput] =
+    useState('')
+
+  const [modelIdInput, setModelIdInput] =
+    useState('1')
+
+  const [modelInfo, setModelInfo] =
+    useState<ModelInfo | null>(null)
+
+  const [modelLookupStatus, setModelLookupStatus] =
     useState('')
 
   const createSepoliaPublicClient = () => {
@@ -704,7 +722,281 @@ function App() {
         )
       }
     }
+const registerModel = async () => {
+  setError('')
+  setTxStatus('')
 
+  if (!window.ethereum || !account) {
+    setError('Collega prima il wallet.')
+    return
+  }
+
+  if (chainId !== sepolia.id) {
+    setError(
+      'MetaMask deve essere collegato a Ethereum Sepolia.',
+    )
+    return
+  }
+
+  if (!roles.includes('AI Developer')) {
+    setError(
+      'Il wallet non ha il ruolo AI Developer.',
+    )
+    return
+  }
+
+  if (!modelInput.trim()) {
+    setError(
+      'Inserisci un valore per il modello.',
+    )
+    return
+  }
+
+  try {
+    const walletClient =
+      createWalletClient({
+        chain: sepolia,
+        transport: custom(
+          window.ethereum,
+        ),
+      })
+
+    const publicClient =
+      createSepoliaPublicClient()
+
+    const modelHash =
+      keccak256(
+        toBytes(
+          modelInput.trim(),
+        ),
+      )
+
+    setTxStatus(
+      'Attendi conferma in MetaMask...',
+    )
+
+    const hash =
+      await walletClient.writeContract({
+        account,
+        chain: sepolia,
+        address: contractAddress,
+        abi: contractAbi,
+        functionName: 'registerModel',
+        args: [modelHash],
+      })
+
+    setTxStatus(
+      `Transazione inviata: ${hash.slice(
+        0,
+        10,
+      )}...`,
+    )
+
+    await publicClient
+      .waitForTransactionReceipt({
+        hash,
+      })
+
+    setTxStatus(
+      'Modello registrato correttamente su Sepolia.',
+    )
+
+    setModelInput('')
+  } catch (err) {
+    console.error(err)
+
+    setError(
+      'Registrazione del modello annullata o non riuscita.',
+    )
+  }
+}
+const loadModel = async () => {
+  setError('')
+  setModelLookupStatus('')
+  setModelInfo(null)
+
+  if (!modelIdInput.trim()) {
+    setError(
+      'Inserisci un Model ID.',
+    )
+    return
+  }
+
+  let modelId: bigint
+
+  try {
+    modelId =
+      BigInt(modelIdInput)
+  } catch {
+    setError(
+      'Il Model ID deve essere un numero.',
+    )
+    return
+  }
+
+  if (modelId <= 0n) {
+    setError(
+      'Il Model ID deve essere maggiore di zero.',
+    )
+    return
+  }
+
+  try {
+    setModelLookupStatus(
+      'Lettura del modello da Sepolia...',
+    )
+
+    const publicClient =
+      createSepoliaPublicClient()
+
+    const model =
+      await publicClient.readContract({
+        address: contractAddress,
+        abi: contractAbi,
+        functionName: 'getModel',
+        args: [modelId],
+      })
+
+    if (!model.exists) {
+      setModelLookupStatus(
+        'Modello non trovato.',
+      )
+      return
+    }
+
+    setModelInfo({
+      id: modelId,
+      modelHash: model.modelHash,
+      developer: model.developer,
+      status: model.status,
+      createdAt: model.createdAt,
+      retiredAt: model.retiredAt,
+    })
+
+    setModelLookupStatus('')
+  } catch (err) {
+    console.error(err)
+
+    setError(
+      'Lettura del modello non riuscita.',
+    )
+  }
+}
+  const retireModel = async () => {
+    setError('')
+    setTxStatus('')
+
+    if (!window.ethereum || !account) {
+      setError('Collega prima il wallet.')
+      return
+    }
+
+    if (chainId !== sepolia.id) {
+      setError(
+        'MetaMask deve essere collegato a Ethereum Sepolia.',
+      )
+      return
+    }
+
+    if (!roles.includes('AI Developer')) {
+      setError(
+        'Il wallet non ha il ruolo AI Developer.',
+      )
+      return
+    }
+
+    if (!modelInfo) {
+      setError(
+        'Carica prima un modello.',
+      )
+      return
+    }
+
+    if (
+      modelInfo.developer.toLowerCase() !==
+      account.toLowerCase()
+    ) {
+      setError(
+        'Solo il developer proprietario può ritirare questo modello.',
+      )
+      return
+    }
+
+    if (modelInfo.status !== 0) {
+      setError(
+        'Il modello non è Active.',
+      )
+      return
+    }
+
+    try {
+      const walletClient =
+        createWalletClient({
+          chain: sepolia,
+          transport: custom(
+            window.ethereum,
+          ),
+        })
+
+      const publicClient =
+        createSepoliaPublicClient()
+
+      setTxStatus(
+        'Attendi conferma in MetaMask...',
+      )
+
+      const hash =
+        await walletClient.writeContract({
+          account,
+          chain: sepolia,
+          address: contractAddress,
+          abi: contractAbi,
+          functionName: 'retireModel',
+          args: [
+            modelInfo.id,
+          ],
+        })
+
+      setTxStatus(
+        `Transazione inviata: ${hash.slice(
+          0,
+          10,
+        )}...`,
+      )
+
+      await publicClient
+        .waitForTransactionReceipt({
+          hash,
+        })
+
+      setTxStatus(
+        'Modello ritirato correttamente.',
+      )
+
+      await loadModel()
+    } catch (err) {
+      console.error(err)
+
+      setError(
+        'Retirement del modello annullato o non riuscito.',
+      )
+    }
+  }
+
+const modelStatusName = (
+  status: number,
+) => {
+  switch (status) {
+    case 0:
+      return 'Active'
+
+    case 1:
+      return 'Retired'
+
+    default:
+      return `Unknown (${status})`
+  }
+}
   const datasetStatusName = (
     status: number,
   ) => {
@@ -1109,6 +1401,191 @@ function App() {
                   }
                 >
                   Approve Dataset
+                </button>
+              )}
+          </>
+        )}
+      </section>
+
+      {roles.includes(
+        'AI Developer',
+      ) && (
+        <section className="status-section">
+          <h3>
+            Model Management
+          </h3>
+
+          <div className="status-card">
+            <span className="status-title">
+              Register Model
+            </span>
+
+            <input
+              type="text"
+              placeholder="Es. datatrace-model-v1"
+              value={
+                modelInput
+              }
+              onChange={(
+                event,
+              ) =>
+                setModelInput(
+                  event.target.value,
+                )
+              }
+            />
+
+            <button
+              className="primary-button"
+              onClick={
+                registerModel
+              }
+            >
+              Register Model
+            </button>
+          </div>
+        </section>
+      )}
+
+      <section className="status-section">
+        <h3>
+          Model Lookup
+        </h3>
+
+        <div className="status-card">
+          <span className="status-title">
+            Model ID
+          </span>
+
+          <input
+            type="number"
+            min="1"
+            value={
+              modelIdInput
+            }
+            onChange={(
+              event,
+            ) =>
+              setModelIdInput(
+                event.target.value,
+              )
+            }
+          />
+
+          <button
+            className="primary-button"
+            onClick={
+              loadModel
+            }
+          >
+            Load Model
+          </button>
+
+          {modelLookupStatus && (
+            <p>
+              {modelLookupStatus}
+            </p>
+          )}
+        </div>
+
+        {modelInfo && (
+          <>
+            <div className="status-grid">
+            <div className="status-card">
+              <span className="status-title">
+                Model ID
+              </span>
+
+              <strong>
+                {modelInfo.id
+                  .toString()}
+              </strong>
+            </div>
+
+            <div className="status-card">
+              <span className="status-title">
+                Developer
+              </span>
+
+              <strong>
+                {`${modelInfo.developer.slice(
+                  0,
+                  6,
+                )}...${modelInfo.developer.slice(
+                  -4,
+                )}`}
+              </strong>
+            </div>
+
+            <div className="status-card">
+              <span className="status-title">
+                Status
+              </span>
+
+              <strong>
+                {modelStatusName(
+                  modelInfo.status,
+                )}
+              </strong>
+            </div>
+
+            <div className="status-card">
+              <span className="status-title">
+                Created At
+              </span>
+
+              <strong>
+                {formatTimestamp(
+                  modelInfo.createdAt,
+                )}
+              </strong>
+            </div>
+
+            {modelInfo.status === 1 &&
+              modelInfo.retiredAt > 0n && (
+                <div className="status-card">
+                  <span className="status-title">
+                    Retired At
+                  </span>
+
+                  <strong>
+                    {formatTimestamp(
+                      modelInfo.retiredAt,
+                    )}
+                  </strong>
+                </div>
+              )}
+
+            <div className="status-card">
+              <span className="status-title">
+                Model Hash
+              </span>
+
+              <strong>
+                {`${modelInfo.modelHash.slice(
+                  0,
+                  12,
+                )}...${modelInfo.modelHash.slice(
+                  -8,
+                )}`}
+              </strong>
+            </div>
+          </div>
+
+            {roles.includes(
+              'AI Developer',
+            ) &&
+              modelInfo.status === 0 &&
+              account &&
+              modelInfo.developer.toLowerCase() ===
+                account.toLowerCase() && (
+                <button
+                  className="primary-button"
+                  onClick={
+                    retireModel
+                  }
+                >
+                  Retire Model
                 </button>
               )}
           </>
