@@ -222,4 +222,132 @@ export const contractAbi = [
   ],
   outputs: [],
 },
+{
+  type: 'function',
+  name: 'registerTraining',
+  stateMutability: 'nonpayable',
+  inputs: [
+    {
+      name: 'modelId',
+      type: 'uint256',
+    },
+    {
+      name: 'datasetIds',
+      type: 'uint256[]',
+    },
+    {
+      name: 'versions',
+      type: 'uint256[]',
+    },
+    {
+      name: 'purpose',
+      type: 'uint8',
+    },
+  ],
+  outputs: [
+    {
+      name: 'trainingId',
+      type: 'uint256',
+    },
+  ],
+},
+{
+  type: 'function',
+  name: 'getTraining',
+  stateMutability: 'view',
+  inputs: [
+    {
+      name: 'trainingId',
+      type: 'uint256',
+    },
+  ],
+  outputs: [
+    {
+      name: '',
+      type: 'tuple',
+      components: [
+        {
+          name: 'modelId',
+          type: 'uint256',
+        },
+        {
+          name: 'developer',
+          type: 'address',
+        },
+        {
+          name: 'purpose',
+          type: 'uint8',
+        },
+        {
+          name: 'createdAt',
+          type: 'uint256',
+        },
+        {
+          name: 'datasetCount',
+          type: 'uint256',
+        },
+        {
+          name: 'exists',
+          type: 'bool',
+        },
+      ],
+    },
+  ],
+},
+{
+  type: 'function',
+  name: 'getTrainingDatasetReference',
+  stateMutability: 'view',
+  inputs: [
+    {
+      name: 'trainingId',
+      type: 'uint256',
+    },
+    {
+      name: 'index',
+      type: 'uint256',
+    },
+  ],
+  outputs: [
+    {
+      name: '',
+      type: 'tuple',
+      components: [
+        {
+          name: 'datasetId',
+          type: 'uint256',
+        },
+        {
+          name: 'version',
+          type: 'uint256',
+        },
+      ],
+    },
+  ],
+},
+{
+  type: 'function',
+  name: 'isPurposeAllowed',
+  stateMutability: 'view',
+  inputs: [
+    { name: 'datasetId', type: 'uint256' },
+    { name: 'version', type: 'uint256' },
+    { name: 'purpose', type: 'uint8' },
+  ],
+  outputs: [
+    { name: '', type: 'bool' },
+  ],
+},
+{
+  type: 'function',
+  name: 'setPurposeAllowed',
+  stateMutability: 'nonpayable',
+  inputs: [
+    { name: 'datasetId', type: 'uint256' },
+    { name: 'version', type: 'uint256' },
+    { name: 'purpose', type: 'uint8' },
+    { name: 'allowed', type: 'bool' },
+  ],
+  outputs: [],
+},
 ] as const
