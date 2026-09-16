@@ -30,6 +30,7 @@ type DatasetInfo = {
   contentHash: Hex
   createdAt: bigint
   status: number
+  allowedPurposes: boolean[]
 }
 type ModelInfo = {
   id: bigint
@@ -38,6 +39,21 @@ type ModelInfo = {
   status: number
   createdAt: bigint
   retiredAt: bigint
+}
+
+type TrainingDatasetReference = {
+  datasetId: bigint
+  version: bigint
+}
+
+type TrainingInfo = {
+  id: bigint
+  modelId: bigint
+  developer: Address
+  purpose: number
+  createdAt: bigint
+  datasetCount: bigint
+  references: TrainingDatasetReference[]
 }
 function App() {
   const [account, setAccount] =
@@ -72,6 +88,15 @@ function App() {
 
   const [versionInput, setVersionInput] =
     useState('')
+
+  const [purposeDatasetId, setPurposeDatasetId] =
+    useState('1')
+
+  const [purposeDatasetVersion, setPurposeDatasetVersion] =
+    useState('3')
+
+  const [purposeValue, setPurposeValue] =
+    useState('0')
   const [modelInput, setModelInput] =
     useState('')
 
@@ -83,6 +108,13 @@ function App() {
 
   const [modelLookupStatus, setModelLookupStatus] =
     useState('')
+
+  const [trainingModelId, setTrainingModelId] = useState('2')
+  const [trainingDatasetId, setTrainingDatasetId] = useState('1')
+  const [trainingDatasetVersion, setTrainingDatasetVersion] = useState('1')
+  const [trainingIdInput, setTrainingIdInput] = useState('1')
+  const [trainingInfo, setTrainingInfo] = useState<TrainingInfo | null>(null)
+  const [trainingLookupStatus, setTrainingLookupStatus] = useState('')
 
   const createSepoliaPublicClient = () => {
     return createPublicClient({
@@ -503,6 +535,74 @@ function App() {
       }
     }
 
+  const updateDatasetPurpose =
+    async () => {
+      setError('')
+      setTxStatus('')
+
+      if (!window.ethereum || !account) {
+        setError('Collega prima il wallet.')
+        return
+      }
+
+      if (chainId !== sepolia.id) {
+        setError('MetaMask deve essere collegato a Ethereum Sepolia.')
+        return
+      }
+
+      if (!roles.includes('Data Provider')) {
+        setError('Il wallet non ha il ruolo Data Provider.')
+        return
+      }
+
+      let datasetId: bigint
+      let version: bigint
+      let purpose: number
+
+      try {
+        datasetId = BigInt(purposeDatasetId)
+        version = BigInt(purposeDatasetVersion)
+        purpose = Number(purposeValue)
+      } catch {
+        setError('Dataset ID, versione o purpose non validi.')
+        return
+      }
+
+      if (datasetId <= 0n || version <= 0n || purpose < 0 || purpose > 3) {
+        setError('Dataset ID, versione o purpose non validi.')
+        return
+      }
+
+      try {
+        const walletClient = createWalletClient({
+          chain: sepolia,
+          transport: custom(window.ethereum),
+        })
+        const publicClient = createSepoliaPublicClient()
+
+        setTxStatus('Attendi conferma in MetaMask...')
+
+        const hash = await walletClient.writeContract({
+          account,
+          chain: sepolia,
+          address: contractAddress,
+          abi: contractAbi,
+          functionName: 'setPurposeAllowed',
+          args: [datasetId, version, purpose, true],
+        })
+
+        setTxStatus(`Transazione inviata: ${hash.slice(0, 10)}...`)
+        await publicClient.waitForTransactionReceipt({ hash })
+        setTxStatus('Purpose abilitato correttamente per la versione del dataset.')
+
+        setDatasetIdInput(datasetId.toString())
+        await loadDatasetById(datasetId)
+      } catch (err) {
+        console.error(err)
+        setError('Aggiornamento del purpose annullato o non riuscito. Verifica che la versione sia Pending e che il wallet sia il provider del dataset.')
+      }
+    }
+
   const loadDatasetById =
     async (
       datasetId: bigint,
@@ -558,6 +658,23 @@ function App() {
           return
         }
 
+        const allowedPurposes =
+          await Promise.all(
+            [0, 1, 2, 3].map(
+              (purpose) =>
+                publicClient.readContract({
+                  address: contractAddress,
+                  abi: contractAbi,
+                  functionName: 'isPurposeAllowed',
+                  args: [
+                    datasetId,
+                    dataset.latestVersion,
+                    purpose,
+                  ],
+                }),
+            ),
+          )
+
         setDatasetInfo({
           id: datasetId,
           provider:
@@ -570,6 +687,8 @@ function App() {
             version.createdAt,
           status:
             version.status,
+          allowedPurposes:
+            allowedPurposes as boolean[],
         })
 
         setLookupStatus('')
@@ -983,6 +1102,148 @@ const loadModel = async () => {
     }
   }
 
+
+  const registerTraining = async () => {
+    setError('')
+    setTxStatus('')
+
+    if (!window.ethereum || !account) {
+      setError('Collega prima il wallet.')
+      return
+    }
+    if (chainId !== sepolia.id) {
+      setError('MetaMask deve essere collegato a Ethereum Sepolia.')
+      return
+    }
+    if (!roles.includes('AI Developer')) {
+      setError('Il wallet non ha il ruolo AI Developer.')
+      return
+    }
+
+    let modelId: bigint
+    let datasetId: bigint
+    let version: bigint
+    try {
+      modelId = BigInt(trainingModelId)
+      datasetId = BigInt(trainingDatasetId)
+      version = BigInt(trainingDatasetVersion)
+    } catch {
+      setError('Model ID, Dataset ID e Version devono essere numeri validi.')
+      return
+    }
+    if (modelId <= 0n || datasetId <= 0n || version <= 0n) {
+      setError('Model ID, Dataset ID e Version devono essere maggiori di zero.')
+      return
+    }
+
+    try {
+      const publicClient = createSepoliaPublicClient()
+      const model = await publicClient.readContract({
+        address: contractAddress,
+        abi: contractAbi,
+        functionName: 'getModel',
+        args: [modelId],
+      })
+      if (!model.exists || model.status !== 0) {
+        setError('Il modello deve esistere ed essere Active.')
+        return
+      }
+      if (model.developer.toLowerCase() !== account.toLowerCase()) {
+        setError('Il modello deve appartenere all’AI Developer collegato.')
+        return
+      }
+
+      const datasetVersion = await publicClient.readContract({
+        address: contractAddress,
+        abi: contractAbi,
+        functionName: 'getDatasetVersion',
+        args: [datasetId, version],
+      })
+      if (!datasetVersion.exists || datasetVersion.status !== 1) {
+        setError('La versione del dataset deve esistere ed essere Approved.')
+        return
+      }
+
+      const walletClient = createWalletClient({
+        chain: sepolia,
+        transport: custom(window.ethereum),
+      })
+      setTxStatus('Attendi conferma in MetaMask...')
+      const hash = await walletClient.writeContract({
+        account,
+        chain: sepolia,
+        address: contractAddress,
+        abi: contractAbi,
+        functionName: 'registerTraining',
+        args: [modelId, [datasetId], [version], 0],
+      })
+      setTxStatus(`Training inviato: ${hash.slice(0, 10)}...`)
+      await publicClient.waitForTransactionReceipt({ hash })
+      setTxStatus('Training registrato correttamente su Sepolia.')
+    } catch (err) {
+      console.error(err)
+      setError('Registrazione del training non riuscita. Verifica che il purpose Research sia consentito per questa versione del dataset.')
+    }
+  }
+
+  const loadTraining = async () => {
+    setError('')
+    setTrainingLookupStatus('')
+    setTrainingInfo(null)
+
+    let trainingId: bigint
+    try {
+      trainingId = BigInt(trainingIdInput)
+    } catch {
+      setError('Il Training ID deve essere un numero.')
+      return
+    }
+    if (trainingId <= 0n) {
+      setError('Il Training ID deve essere maggiore di zero.')
+      return
+    }
+
+    try {
+      setTrainingLookupStatus('Lettura del training e della provenance da Sepolia...')
+      const publicClient = createSepoliaPublicClient()
+      const training = await publicClient.readContract({
+        address: contractAddress,
+        abi: contractAbi,
+        functionName: 'getTraining',
+        args: [trainingId],
+      })
+      const references = await Promise.all(
+        Array.from({ length: Number(training.datasetCount) }, (_, index) =>
+          publicClient.readContract({
+            address: contractAddress,
+            abi: contractAbi,
+            functionName: 'getTrainingDatasetReference',
+            args: [trainingId, BigInt(index)],
+          }),
+        ),
+      )
+      setTrainingInfo({
+        id: trainingId,
+        modelId: training.modelId,
+        developer: training.developer,
+        purpose: training.purpose,
+        createdAt: training.createdAt,
+        datasetCount: training.datasetCount,
+        references: references.map((reference) => ({
+          datasetId: reference.datasetId,
+          version: reference.version,
+        })),
+      })
+      setTrainingLookupStatus('')
+    } catch (err) {
+      console.error(err)
+      setTrainingLookupStatus('Training non trovato o lettura non riuscita.')
+    }
+  }
+
+  const trainingPurposeName = (purpose: number) =>
+    purpose === 0 ? 'Research' : `Purpose ${purpose}`
+
 const modelStatusName = (
   status: number,
 ) => {
@@ -1264,6 +1525,45 @@ const modelStatusName = (
                 Add Version
               </button>
             </div>
+
+            <div className="status-card">
+              <span className="status-title">
+                Purpose Management
+              </span>
+
+              <input
+                type="number"
+                min="1"
+                placeholder="Dataset ID"
+                value={purposeDatasetId}
+                onChange={(event) => setPurposeDatasetId(event.target.value)}
+              />
+
+              <input
+                type="number"
+                min="1"
+                placeholder="Dataset Version"
+                value={purposeDatasetVersion}
+                onChange={(event) => setPurposeDatasetVersion(event.target.value)}
+              />
+
+              <select
+                value={purposeValue}
+                onChange={(event) => setPurposeValue(event.target.value)}
+              >
+                <option value="0">Research</option>
+                <option value="1">Classification</option>
+                <option value="2">Analytics</option>
+                <option value="3">Testing</option>
+              </select>
+
+              <button
+                className="primary-button"
+                onClick={updateDatasetPurpose}
+              >
+                Allow Purpose
+              </button>
+            </div>
           </div>
         </section>
       )}
@@ -1385,6 +1685,31 @@ const modelStatusName = (
                   )}...${datasetInfo.contentHash.slice(
                     -8,
                   )}`}
+                </strong>
+              </div>
+
+              <div className="status-card">
+                <span className="status-title">
+                  Allowed Purposes
+                </span>
+
+                <strong>
+                  {datasetInfo.allowedPurposes
+                    .map((allowed, index) => {
+                      const names = [
+                        'Research',
+                        'Classification',
+                        'Analytics',
+                        'Testing',
+                      ]
+
+                      return `${names[index]}: ${
+                        allowed
+                          ? 'Allowed'
+                          : 'Not Allowed'
+                      }`
+                    })
+                    .join(' | ')}
                 </strong>
               </div>
             </div>
@@ -1591,6 +1916,96 @@ const modelStatusName = (
           </>
         )}
       </section>
+
+      {roles.includes('AI Developer') && (
+        <section className="status-section">
+          <h3>Training Management</h3>
+          <div className="status-grid">
+            <div className="status-card">
+              <span className="status-title">Model ID</span>
+              <input type="number" min="1" value={trainingModelId}
+                onChange={(event) => setTrainingModelId(event.target.value)} />
+            </div>
+            <div className="status-card">
+              <span className="status-title">Dataset ID</span>
+              <input type="number" min="1" value={trainingDatasetId}
+                onChange={(event) => setTrainingDatasetId(event.target.value)} />
+            </div>
+            <div className="status-card">
+              <span className="status-title">Dataset Version</span>
+              <input type="number" min="1" value={trainingDatasetVersion}
+                onChange={(event) => setTrainingDatasetVersion(event.target.value)} />
+            </div>
+            <div className="status-card">
+              <span className="status-title">Purpose</span>
+              <strong>Research</strong>
+              <p>Purpose 0</p>
+            </div>
+          </div>
+          <button className="primary-button" onClick={registerTraining}>
+            Register Training
+          </button>
+        </section>
+      )}
+
+      <section className="status-section">
+        <h3>Training Lookup & Provenance</h3>
+        <div className="status-card">
+          <span className="status-title">Training ID</span>
+          <input type="number" min="1" value={trainingIdInput}
+            onChange={(event) => setTrainingIdInput(event.target.value)} />
+          <button className="primary-button" onClick={loadTraining}>
+            Load Training
+          </button>
+          {trainingLookupStatus && <p>{trainingLookupStatus}</p>}
+        </div>
+
+        {trainingInfo && (
+          <>
+            <div className="status-grid">
+              <div className="status-card">
+                <span className="status-title">Training ID</span>
+                <strong>{trainingInfo.id.toString()}</strong>
+              </div>
+              <div className="status-card">
+                <span className="status-title">Model ID</span>
+                <strong>{trainingInfo.modelId.toString()}</strong>
+              </div>
+              <div className="status-card">
+                <span className="status-title">Developer</span>
+                <strong>{`${trainingInfo.developer.slice(0, 6)}...${trainingInfo.developer.slice(-4)}`}</strong>
+              </div>
+              <div className="status-card">
+                <span className="status-title">Purpose</span>
+                <strong>{trainingPurposeName(trainingInfo.purpose)}</strong>
+              </div>
+              <div className="status-card">
+                <span className="status-title">Created At</span>
+                <strong>{formatTimestamp(trainingInfo.createdAt)}</strong>
+              </div>
+              <div className="status-card">
+                <span className="status-title">Dataset Count</span>
+                <strong>{trainingInfo.datasetCount.toString()}</strong>
+              </div>
+            </div>
+
+            <h3>Exact Dataset Provenance</h3>
+            <div className="status-grid">
+              {trainingInfo.references.map((reference, index) => (
+                <div className="status-card"
+                  key={`${reference.datasetId}-${reference.version}-${index}`}>
+                  <span className="status-title">
+                    Dataset Reference #{index + 1}
+                  </span>
+                  <strong>Dataset {reference.datasetId.toString()}</strong>
+                  <p>Exact Version: {reference.version.toString()}</p>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+
     </main>
   )
 }
