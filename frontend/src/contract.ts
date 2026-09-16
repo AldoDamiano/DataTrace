@@ -180,4 +180,46 @@ export const contractAbi = [
     ],
     outputs: [],
   },
+  {
+  type: 'function',
+  name: 'registerModel',
+  stateMutability: 'nonpayable',
+  inputs: [
+    { name: 'modelHash', type: 'bytes32' },
+  ],
+  outputs: [
+    { name: 'modelId', type: 'uint256' },
+  ],
+},
+{
+  type: 'function',
+  name: 'getModel',
+  stateMutability: 'view',
+  inputs: [
+    { name: 'modelId', type: 'uint256' },
+  ],
+  outputs: [
+    {
+      name: '',
+      type: 'tuple',
+      components: [
+        { name: 'modelHash', type: 'bytes32' },
+        { name: 'developer', type: 'address' },
+        { name: 'status', type: 'uint8' },
+        { name: 'createdAt', type: 'uint256' },
+        { name: 'retiredAt', type: 'uint256' },
+        { name: 'exists', type: 'bool' },
+      ],
+    },
+  ],
+},
+{
+  type: 'function',
+  name: 'retireModel',
+  stateMutability: 'nonpayable',
+  inputs: [
+    { name: 'modelId', type: 'uint256' },
+  ],
+  outputs: [],
+},
 ] as const
