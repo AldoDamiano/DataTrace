@@ -350,4 +350,41 @@ export const contractAbi = [
   ],
   outputs: [],
 },
+{
+  type: 'function',
+  name: 'submitAudit',
+  stateMutability: 'nonpayable',
+  inputs: [
+    { name: 'datasetId', type: 'uint256' },
+    { name: 'version', type: 'uint256' },
+    { name: 'reportHash', type: 'bytes32' },
+    { name: 'outcome', type: 'uint8' },
+  ],
+  outputs: [
+    { name: 'auditId', type: 'uint256' },
+  ],
+},
+{
+  type: 'function',
+  name: 'getAudit',
+  stateMutability: 'view',
+  inputs: [
+    { name: 'auditId', type: 'uint256' },
+  ],
+  outputs: [
+    {
+      name: '',
+      type: 'tuple',
+      components: [
+        { name: 'datasetId', type: 'uint256' },
+        { name: 'version', type: 'uint256' },
+        { name: 'auditor', type: 'address' },
+        { name: 'reportHash', type: 'bytes32' },
+        { name: 'outcome', type: 'uint8' },
+        { name: 'createdAt', type: 'uint256' },
+        { name: 'exists', type: 'bool' },
+      ],
+    },
+  ],
+},
 ] as const

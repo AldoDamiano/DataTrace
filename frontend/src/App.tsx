@@ -55,6 +55,16 @@ type TrainingInfo = {
   datasetCount: bigint
   references: TrainingDatasetReference[]
 }
+
+type AuditInfo = {
+  id: bigint
+  datasetId: bigint
+  version: bigint
+  auditor: Address
+  reportHash: Hex
+  outcome: number
+  createdAt: bigint
+}
 function App() {
   const [account, setAccount] =
     useState<Address | null>(null)
@@ -115,6 +125,14 @@ function App() {
   const [trainingIdInput, setTrainingIdInput] = useState('1')
   const [trainingInfo, setTrainingInfo] = useState<TrainingInfo | null>(null)
   const [trainingLookupStatus, setTrainingLookupStatus] = useState('')
+
+  const [auditDatasetId, setAuditDatasetId] = useState('1')
+  const [auditDatasetVersion, setAuditDatasetVersion] = useState('3')
+  const [auditReport, setAuditReport] = useState('datatrace-audit-report-001')
+  const [auditOutcome, setAuditOutcome] = useState('0')
+  const [auditIdInput, setAuditIdInput] = useState('1')
+  const [auditInfo, setAuditInfo] = useState<AuditInfo | null>(null)
+  const [auditLookupStatus, setAuditLookupStatus] = useState('')
 
   const createSepoliaPublicClient = () => {
     return createPublicClient({
@@ -1241,6 +1259,152 @@ const loadModel = async () => {
     }
   }
 
+  const submitAudit = async () => {
+    setError('')
+    setTxStatus('')
+
+    if (!window.ethereum || !account) {
+      setError('Collega prima il wallet.')
+      return
+    }
+    if (chainId !== sepolia.id) {
+      setError('MetaMask deve essere collegato a Ethereum Sepolia.')
+      return
+    }
+    if (!roles.includes('Auditor')) {
+      setError('Il wallet non ha il ruolo Auditor.')
+      return
+    }
+
+    let datasetId: bigint
+    let version: bigint
+    let outcome: number
+    try {
+      datasetId = BigInt(auditDatasetId)
+      version = BigInt(auditDatasetVersion)
+      outcome = Number(auditOutcome)
+    } catch {
+      setError('Dataset ID, Version e Outcome devono essere validi.')
+      return
+    }
+
+    if (datasetId <= 0n || version <= 0n) {
+      setError('Dataset ID e Version devono essere maggiori di zero.')
+      return
+    }
+    if (![0, 1, 2].includes(outcome)) {
+      setError('Outcome non valido.')
+      return
+    }
+    if (!auditReport.trim()) {
+      setError('Inserisci un riferimento o contenuto per il report di audit.')
+      return
+    }
+
+    try {
+      const publicClient = createSepoliaPublicClient()
+      const datasetVersion = await publicClient.readContract({
+        address: contractAddress,
+        abi: contractAbi,
+        functionName: 'getDatasetVersion',
+        args: [datasetId, version],
+      })
+
+      if (!datasetVersion.exists) {
+        setError('La versione del dataset non esiste.')
+        return
+      }
+      if (datasetVersion.status === 3) {
+        setError('Non è possibile aggiungere un nuovo audit a una versione Revoked.')
+        return
+      }
+
+      const reportHash = keccak256(toBytes(auditReport.trim()))
+      const walletClient = createWalletClient({
+        chain: sepolia,
+        transport: custom(window.ethereum),
+      })
+
+      setTxStatus('Attendi conferma in MetaMask...')
+      const hash = await walletClient.writeContract({
+        account,
+        chain: sepolia,
+        address: contractAddress,
+        abi: contractAbi,
+        functionName: 'submitAudit',
+        args: [datasetId, version, reportHash, outcome],
+      })
+
+      setTxStatus(`Audit inviato: ${hash.slice(0, 10)}...`)
+      await publicClient.waitForTransactionReceipt({ hash })
+      setTxStatus('Audit registrato correttamente su Sepolia.')
+    } catch (err) {
+      console.error(err)
+      setError('Registrazione dell audit non riuscita. Verifica ruolo Auditor, dataset/versione e stato del contratto.')
+    }
+  }
+
+  const loadAudit = async () => {
+    setError('')
+    setAuditLookupStatus('')
+    setAuditInfo(null)
+
+    let auditId: bigint
+    try {
+      auditId = BigInt(auditIdInput)
+    } catch {
+      setError('Audit ID deve essere un numero.')
+      return
+    }
+    if (auditId <= 0n) {
+      setError('Audit ID deve essere maggiore di zero.')
+      return
+    }
+
+    try {
+      setAuditLookupStatus('Lettura dell audit da Sepolia...')
+      const publicClient = createSepoliaPublicClient()
+      const audit = await publicClient.readContract({
+        address: contractAddress,
+        abi: contractAbi,
+        functionName: 'getAudit',
+        args: [auditId],
+      })
+
+      if (!audit.exists) {
+        setAuditLookupStatus('Audit non trovato.')
+        return
+      }
+
+      setAuditInfo({
+        id: auditId,
+        datasetId: audit.datasetId,
+        version: audit.version,
+        auditor: audit.auditor,
+        reportHash: audit.reportHash,
+        outcome: audit.outcome,
+        createdAt: audit.createdAt,
+      })
+      setAuditLookupStatus('')
+    } catch (err) {
+      console.error(err)
+      setAuditLookupStatus('Audit non trovato o lettura non riuscita.')
+    }
+  }
+
+  const auditOutcomeName = (outcome: number) => {
+    switch (outcome) {
+      case 0:
+        return 'Compliant'
+      case 1:
+        return 'Needs Review'
+      case 2:
+        return 'Non Compliant'
+      default:
+        return `Unknown (${outcome})`
+    }
+  }
+
   const trainingPurposeName = (purpose: number) =>
     purpose === 0 ? 'Research' : `Purpose ${purpose}`
 
@@ -2003,6 +2167,88 @@ const modelStatusName = (
               ))}
             </div>
           </>
+        )}
+      </section>
+
+      {roles.includes('Auditor') && (
+        <section className="status-section">
+          <h3>Audit Management</h3>
+          <div className="status-grid">
+            <div className="status-card">
+              <span className="status-title">Dataset ID</span>
+              <input type="number" min="1" value={auditDatasetId}
+                onChange={(event) => setAuditDatasetId(event.target.value)} />
+            </div>
+            <div className="status-card">
+              <span className="status-title">Dataset Version</span>
+              <input type="number" min="1" value={auditDatasetVersion}
+                onChange={(event) => setAuditDatasetVersion(event.target.value)} />
+            </div>
+            <div className="status-card">
+              <span className="status-title">Audit Report</span>
+              <input type="text" value={auditReport}
+                onChange={(event) => setAuditReport(event.target.value)} />
+              <p>Il report resta off-chain; DataTrace registra solo il suo hash.</p>
+            </div>
+            <div className="status-card">
+              <span className="status-title">Outcome</span>
+              <select value={auditOutcome}
+                onChange={(event) => setAuditOutcome(event.target.value)}>
+                <option value="0">Compliant</option>
+                <option value="1">Needs Review</option>
+                <option value="2">Non Compliant</option>
+              </select>
+            </div>
+          </div>
+          <button className="primary-button" onClick={submitAudit}>
+            Submit Audit
+          </button>
+        </section>
+      )}
+
+      <section className="status-section">
+        <h3>Audit Lookup</h3>
+        <div className="status-card">
+          <span className="status-title">Audit ID</span>
+          <input type="number" min="1" value={auditIdInput}
+            onChange={(event) => setAuditIdInput(event.target.value)} />
+          <button className="primary-button" onClick={loadAudit}>
+            Load Audit
+          </button>
+          {auditLookupStatus && <p>{auditLookupStatus}</p>}
+        </div>
+
+        {auditInfo && (
+          <div className="status-grid">
+            <div className="status-card">
+              <span className="status-title">Audit ID</span>
+              <strong>{auditInfo.id.toString()}</strong>
+            </div>
+            <div className="status-card">
+              <span className="status-title">Dataset ID</span>
+              <strong>{auditInfo.datasetId.toString()}</strong>
+            </div>
+            <div className="status-card">
+              <span className="status-title">Exact Version</span>
+              <strong>{auditInfo.version.toString()}</strong>
+            </div>
+            <div className="status-card">
+              <span className="status-title">Auditor</span>
+              <strong>{`${auditInfo.auditor.slice(0, 6)}...${auditInfo.auditor.slice(-4)}`}</strong>
+            </div>
+            <div className="status-card">
+              <span className="status-title">Outcome</span>
+              <strong>{auditOutcomeName(auditInfo.outcome)}</strong>
+            </div>
+            <div className="status-card">
+              <span className="status-title">Created At</span>
+              <strong>{formatTimestamp(auditInfo.createdAt)}</strong>
+            </div>
+            <div className="status-card">
+              <span className="status-title">Report Hash</span>
+              <strong>{`${auditInfo.reportHash.slice(0, 12)}...${auditInfo.reportHash.slice(-8)}`}</strong>
+            </div>
+          </div>
         )}
       </section>
 
