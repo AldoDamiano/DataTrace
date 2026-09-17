@@ -387,4 +387,36 @@ export const contractAbi = [
     },
   ],
 },
+{
+  type: 'function',
+  name: 'isTrainingAffected',
+  stateMutability: 'view',
+  inputs: [
+    { name: 'trainingId', type: 'uint256' },
+  ],
+  outputs: [
+    { name: '', type: 'bool' },
+  ],
+},
+{
+  type: 'function',
+  name: 'isModelAffected',
+  stateMutability: 'view',
+  inputs: [
+    { name: 'modelId', type: 'uint256' },
+  ],
+  outputs: [
+    { name: '', type: 'bool' },
+  ],
+},
+{
+  type: 'function',
+  name: 'revokeDatasetVersion',
+  stateMutability: 'nonpayable',
+  inputs: [
+    { name: 'datasetId', type: 'uint256' },
+    { name: 'version', type: 'uint256' },
+  ],
+  outputs: [],
+},
 ] as const

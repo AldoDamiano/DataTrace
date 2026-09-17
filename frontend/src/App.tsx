@@ -134,6 +134,16 @@ function App() {
   const [auditInfo, setAuditInfo] = useState<AuditInfo | null>(null)
   const [auditLookupStatus, setAuditLookupStatus] = useState('')
 
+  const [impactTrainingId, setImpactTrainingId] = useState('1')
+  const [impactTrainingAffected, setImpactTrainingAffected] = useState<boolean | null>(null)
+  const [impactTrainingStatus, setImpactTrainingStatus] = useState('')
+  const [impactModelId, setImpactModelId] = useState('2')
+  const [impactModelAffected, setImpactModelAffected] = useState<boolean | null>(null)
+  const [impactModelStatus, setImpactModelStatus] = useState('')
+
+  const [revokeDatasetId, setRevokeDatasetId] = useState('1')
+  const [revokeDatasetVersion, setRevokeDatasetVersion] = useState('3')
+
   const createSepoliaPublicClient = () => {
     return createPublicClient({
       chain: sepolia,
@@ -859,6 +869,97 @@ function App() {
         )
       }
     }
+const revokeDataset = async () => {
+  setError('')
+  setTxStatus('')
+
+  if (!window.ethereum || !account) {
+    setError('Collega prima il wallet.')
+    return
+  }
+
+  if (chainId !== sepolia.id) {
+    setError('MetaMask deve essere collegato a Ethereum Sepolia.')
+    return
+  }
+
+  if (!roles.includes('Governance')) {
+    setError('Il wallet non ha il ruolo Governance.')
+    return
+  }
+
+  let datasetId: bigint
+  let version: bigint
+
+  try {
+    datasetId = BigInt(revokeDatasetId)
+    version = BigInt(revokeDatasetVersion)
+  } catch {
+    setError('Dataset ID e versione devono essere numeri validi.')
+    return
+  }
+
+  if (datasetId <= 0n || version <= 0n) {
+    setError('Dataset ID e versione devono essere maggiori di zero.')
+    return
+  }
+
+  try {
+    const publicClient = createSepoliaPublicClient()
+
+    const datasetVersion = await publicClient.readContract({
+      address: contractAddress,
+      abi: contractAbi,
+      functionName: 'getDatasetVersion',
+      args: [datasetId, version],
+    })
+
+    if (!datasetVersion.exists) {
+      setError('La versione del dataset indicata non esiste.')
+      return
+    }
+
+    // DatasetStatus: 1 = Approved, 2 = Suspended.
+    if (datasetVersion.status !== 1 && datasetVersion.status !== 2) {
+      setError('La versione può essere revocata solo se è Approved o Suspended.')
+      return
+    }
+
+    const walletClient = createWalletClient({
+      chain: sepolia,
+      transport: custom(window.ethereum),
+    })
+
+    setTxStatus('Attendi conferma in MetaMask...')
+
+    const hash = await walletClient.writeContract({
+      account,
+      chain: sepolia,
+      address: contractAddress,
+      abi: contractAbi,
+      functionName: 'revokeDatasetVersion',
+      args: [datasetId, version],
+    })
+
+    setTxStatus(`Transazione inviata: ${hash.slice(0, 10)}...`)
+
+    await publicClient.waitForTransactionReceipt({ hash })
+
+    setTxStatus('Versione del dataset revocata correttamente.')
+    setImpactTrainingAffected(null)
+    setImpactTrainingStatus('')
+    setImpactModelAffected(null)
+    setImpactModelStatus('')
+
+    if (datasetInfo?.id === datasetId) {
+      await loadDatasetById(datasetId)
+    }
+  } catch (err) {
+    console.error(err)
+    setError('Revoca del dataset annullata o non riuscita.')
+  }
+}
+
 const registerModel = async () => {
   setError('')
   setTxStatus('')
@@ -1392,6 +1493,78 @@ const loadModel = async () => {
     }
   }
 
+  const checkTrainingImpact = async () => {
+    setError('')
+    setImpactTrainingStatus('')
+    setImpactTrainingAffected(null)
+
+    let trainingId: bigint
+    try {
+      trainingId = BigInt(impactTrainingId)
+    } catch {
+      setError('Training ID deve essere un numero.')
+      return
+    }
+
+    if (trainingId <= 0n) {
+      setError('Training ID deve essere maggiore di zero.')
+      return
+    }
+
+    try {
+      setImpactTrainingStatus('Analisi del training su Sepolia...')
+      const publicClient = createSepoliaPublicClient()
+      const affected = await publicClient.readContract({
+        address: contractAddress,
+        abi: contractAbi,
+        functionName: 'isTrainingAffected',
+        args: [trainingId],
+      })
+
+      setImpactTrainingAffected(affected)
+      setImpactTrainingStatus('')
+    } catch (err) {
+      console.error(err)
+      setImpactTrainingStatus('Analisi non riuscita. Verifica che il Training ID esista.')
+    }
+  }
+
+  const checkModelImpact = async () => {
+    setError('')
+    setImpactModelStatus('')
+    setImpactModelAffected(null)
+
+    let modelId: bigint
+    try {
+      modelId = BigInt(impactModelId)
+    } catch {
+      setError('Model ID deve essere un numero.')
+      return
+    }
+
+    if (modelId <= 0n) {
+      setError('Model ID deve essere maggiore di zero.')
+      return
+    }
+
+    try {
+      setImpactModelStatus('Analisi del modello su Sepolia...')
+      const publicClient = createSepoliaPublicClient()
+      const affected = await publicClient.readContract({
+        address: contractAddress,
+        abi: contractAbi,
+        functionName: 'isModelAffected',
+        args: [modelId],
+      })
+
+      setImpactModelAffected(affected)
+      setImpactModelStatus('')
+    } catch (err) {
+      console.error(err)
+      setImpactModelStatus('Analisi non riuscita. Verifica che il Model ID esista.')
+    }
+  }
+
   const auditOutcomeName = (outcome: number) => {
     switch (outcome) {
       case 0:
@@ -1896,6 +2069,42 @@ const modelStatusName = (
         )}
       </section>
 
+      {roles.includes('Governance') && (
+        <section className="status-section">
+          <h3>Dataset Revocation</h3>
+          <p>
+            Revoca una versione Approved o Suspended. La provenance storica resta
+            registrata e l'Impact Analysis può rilevare training e modelli coinvolti.
+          </p>
+
+          <div className="status-grid">
+            <div className="status-card">
+              <span className="status-title">Dataset ID</span>
+              <input
+                type="number"
+                min="1"
+                value={revokeDatasetId}
+                onChange={(event) => setRevokeDatasetId(event.target.value)}
+              />
+            </div>
+
+            <div className="status-card">
+              <span className="status-title">Dataset Version</span>
+              <input
+                type="number"
+                min="1"
+                value={revokeDatasetVersion}
+                onChange={(event) => setRevokeDatasetVersion(event.target.value)}
+              />
+            </div>
+          </div>
+
+          <button className="primary-button" onClick={revokeDataset}>
+            Revoke Dataset Version
+          </button>
+        </section>
+      )}
+
       {roles.includes(
         'AI Developer',
       ) && (
@@ -2168,6 +2377,54 @@ const modelStatusName = (
             </div>
           </>
         )}
+      </section>
+
+      <section className="status-section">
+        <h3>Impact Analysis</h3>
+        <p>
+          Verifica se un training o un modello dipende da una versione di dataset revocata.
+          L'analisi è read-only e non richiede gas.
+        </p>
+
+        <div className="status-grid">
+          <div className="status-card">
+            <span className="status-title">Training Impact</span>
+            <input
+              type="number"
+              min="1"
+              value={impactTrainingId}
+              onChange={(event) => setImpactTrainingId(event.target.value)}
+            />
+            <button className="primary-button" onClick={checkTrainingImpact}>
+              Check Training Impact
+            </button>
+            {impactTrainingStatus && <p>{impactTrainingStatus}</p>}
+            {impactTrainingAffected !== null && (
+              <strong>
+                {impactTrainingAffected ? 'AFFECTED' : 'NOT AFFECTED'}
+              </strong>
+            )}
+          </div>
+
+          <div className="status-card">
+            <span className="status-title">Model Impact</span>
+            <input
+              type="number"
+              min="1"
+              value={impactModelId}
+              onChange={(event) => setImpactModelId(event.target.value)}
+            />
+            <button className="primary-button" onClick={checkModelImpact}>
+              Check Model Impact
+            </button>
+            {impactModelStatus && <p>{impactModelStatus}</p>}
+            {impactModelAffected !== null && (
+              <strong>
+                {impactModelAffected ? 'AFFECTED' : 'NOT AFFECTED'}
+              </strong>
+            )}
+          </div>
+        </div>
       </section>
 
       {roles.includes('Auditor') && (
