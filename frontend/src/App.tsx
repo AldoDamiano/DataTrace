@@ -1650,20 +1650,30 @@ const modelStatusName = (
           </p>
         </div>
 
-        {account ? (
-          <div className="wallet-badge">
-            {shortAddress}
-          </div>
-        ) : (
+        <div className="navbar-actions">
+          {account ? (
+            <div className="wallet-badge">
+              {shortAddress}
+            </div>
+          ) : (
+            <button
+              className="connect-button"
+              onClick={
+                connectWallet
+              }
+            >
+              Connect Wallet
+            </button>
+          )}
+
           <button
-            className="connect-button"
-            onClick={
-              connectWallet
-            }
+            className="refresh-button"
+            onClick={() => window.location.reload()}
+            title="Refresh page after changing MetaMask account"
           >
-            Connect Wallet
+            ↻ Refresh
           </button>
-        )}
+        </div>
       </header>
 
       <section className="hero-section">
@@ -2400,7 +2410,8 @@ const modelStatusName = (
             </button>
             {impactTrainingStatus && <p>{impactTrainingStatus}</p>}
             {impactTrainingAffected !== null && (
-              <strong>
+              <strong className={`impact-result ${impactTrainingAffected ? 'impact-danger' : 'impact-safe'}`}>
+                <span className="impact-dot" />
                 {impactTrainingAffected ? 'AFFECTED' : 'NOT AFFECTED'}
               </strong>
             )}
@@ -2419,7 +2430,8 @@ const modelStatusName = (
             </button>
             {impactModelStatus && <p>{impactModelStatus}</p>}
             {impactModelAffected !== null && (
-              <strong>
+              <strong className={`impact-result ${impactModelAffected ? 'impact-danger' : 'impact-safe'}`}>
+                <span className="impact-dot" />
                 {impactModelAffected ? 'AFFECTED' : 'NOT AFFECTED'}
               </strong>
             )}
